@@ -187,7 +187,10 @@ class GroqService:
 
                 except Exception as error:
                     if self._is_request_too_large(error):
-                        raise
+                        raise RuntimeError(
+                            "Groq request exceeds the account token limit. "
+                            "Try fewer questions or a different model."
+                        ) from None
 
                     last_error = error
                     if attempt < retries - 1:
@@ -197,10 +200,15 @@ class GroqService:
                             )
                         )
 
-            failures.append(f"{model}: {last_error}")
+            # Provider error bodies can echo credentials or request data.
+            status = getattr(last_error, "status_code", None)
+            failures.append(
+                f"{model}: {type(last_error).__name__}"
+                + (f" (HTTP {status})" if isinstance(status, int) else "")
+            )
 
         raise RuntimeError(
             f"Groq API request failed after "
             f"{retries} attempts on every model "
             f"({'; '.join(failures)})"
-        )
+        ) from None
